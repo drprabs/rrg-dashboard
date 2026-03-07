@@ -35,8 +35,7 @@ Q_WEAKENING = "rgba(255,193,7,0.12)"
 
 # ─── DATA FETCH & RRG COMPUTATION ────────────────────────────
 def fetch_and_compute(sectors, benchmark, timeframe, lookback, history_len):
-    interval = "1wk" if timeframe == "Weekly" else "1mo"
-    lb = lookback
+    interval = "1d" if timeframe == "Daily" else "1wk" if timeframe == "Weekly" else "1mo"
 
     tickers = [benchmark] + [s["ticker"] for s in sectors]
     raw = yf.download(tickers, period="5y", interval=interval,
@@ -58,10 +57,10 @@ def fetch_and_compute(sectors, benchmark, timeframe, lookback, history_len):
         b = combined.iloc[:, 0]
         p = combined.iloc[:, 1]
 
-        b_chg = b.pct_change(lb)
-        p_chg = p.pct_change(lb)
+        b_chg = b.pct_change(lookback)
+        p_chg = p.pct_change(lookback)
 
-        rs = (1 + p_chg) / (1 + b_chg)
+        rs     = (1 + p_chg) / (1 + b_chg)
         rs_mom = (rs / rs.shift(1)) * 100
 
         df_s = pd.DataFrame({
@@ -87,7 +86,7 @@ def build_figure(results, history_len, last_dot_size, prev_dot_size):
     if not all_x:
         return fig
 
-    pad = 1
+    pad   = 1
     min_x = np.floor(min(all_x)) - pad
     max_x = np.ceil(max(all_x))  + pad
     min_y = np.floor(min(all_y)) - pad
@@ -135,7 +134,7 @@ def build_figure(results, history_len, last_dot_size, prev_dot_size):
         x_raw = df["rs"].values
         y_raw = df["mom"].values
 
-        # Generate smooth curve if enough points
+        # Smooth spline if enough points
         if n >= 4:
             t        = np.linspace(0, 1, n)
             t_smooth = np.linspace(0, 1, n * 20)
@@ -157,7 +156,7 @@ def build_figure(results, history_len, last_dot_size, prev_dot_size):
             hoverinfo="skip"
         ))
 
-        # Actual data point markers
+        # Data point markers
         sizes = [prev_dot_size] * n
         if n > 0:
             sizes[-1] = last_dot_size
@@ -213,7 +212,6 @@ sector_options = [{"label": f"{s['ticker']} – {s['name']}", "value": s["ticker
                   for s in DEFAULT_SECTORS]
 default_enabled = ["XLE", "XLB", "XLI", "XLY", "XLP", "XLV", "XLF", "XLK", "XLC", "XLU", "XLRE"]
 
-
 app.layout = html.Div(style={"backgroundColor": "#0d1117", "minHeight": "100vh",
                               "padding": "20px", "fontFamily": "Inter, sans-serif"}, children=[
 
@@ -242,14 +240,14 @@ app.layout = html.Div(style={"backgroundColor": "#0d1117", "minHeight": "100vh",
 
         html.Div([
             html.Label("Timeframe", style={"color": "#8b949e", "fontSize": "12px"}),
-            dcc.Dropdown(id="timeframe", options=["Weekly", "Monthly"],
+            dcc.Dropdown(id="timeframe", options=["Daily", "Weekly", "Monthly"],
                          value="Weekly", clearable=False,
                          style={"width": "130px", "backgroundColor": "#161b22"})
         ]),
 
         html.Div([
             html.Label("Lookback (periods)", style={"color": "#8b949e", "fontSize": "12px"}),
-            dcc.Input(id="lookback", value=26, type="number", min=1, max=60,
+            dcc.Input(id="lookback", value=13, type="number", min=1, max=60,
                       style={"width": "80px", "backgroundColor": "#161b22",
                              "color": "#e6edf3", "border": "1px solid #30363d",
                              "borderRadius": "6px", "padding": "6px"})
@@ -258,9 +256,9 @@ app.layout = html.Div(style={"backgroundColor": "#0d1117", "minHeight": "100vh",
         html.Div([
             html.Label("History Tail (bars)", style={"color": "#8b949e", "fontSize": "12px"}),
             dcc.Slider(id="history", min=2, max=60, step=1, value=8,
-                       marks={2: "2", 13: "13", 26: "26", 52: "52"},
+                       marks={2: "2", 13: "13", 26: "26", 52: "52", 60: "60"},
                        tooltip={"placement": "bottom"})
-        ], style={"width": "200px"}),
+        ], style={"width": "220px"}),
 
         html.Div([
             html.Label("Last Dot Size", style={"color": "#8b949e", "fontSize": "12px"}),
@@ -316,7 +314,7 @@ def update_chart(_, selected_sectors, benchmark, timeframe,
         return go.Figure()
 
     sectors = [s for s in DEFAULT_SECTORS if s["ticker"] in selected_sectors]
-    lb  = int(lookback)      if lookback      else (60 if timeframe == "Weekly" else 12)
+    lb  = int(lookback)      if lookback      else (20 if timeframe == "Daily" else 13 if timeframe == "Weekly" else 3)
     hl  = int(history_len)   if history_len   else 8
     lds = int(last_dot_size) if last_dot_size else 10
 
