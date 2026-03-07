@@ -1,6 +1,6 @@
 # ============================================================
 # Sector Rotation / RRG Dashboard
-# pip install dash plotly yfinance pandas numpy
+# pip install dash plotly yfinance pandas numpy scipy
 # Run: python rrg_app.py  →  open http://127.0.0.1:8050
 # ============================================================
 
@@ -10,6 +10,7 @@ import numpy as np
 import dash
 from dash import dcc, html, Input, Output, State
 import plotly.graph_objects as go
+from scipy.interpolate import make_interp_spline
 
 # ─── DEFAULT SECTORS ─────────────────────────────────────────
 DEFAULT_SECTORS = [
@@ -41,12 +42,10 @@ def fetch_and_compute(sectors, benchmark, timeframe, lookback, history_len):
     raw = yf.download(tickers, period="5y", interval=interval,
                       auto_adjust=True, progress=False)["Close"]
 
-    # Ensure consistent columns even for single ticker
     if isinstance(raw, pd.Series):
         raw = raw.to_frame()
 
     raw = raw.dropna(how="all")
-
     bench = raw[benchmark]
 
     results = []
@@ -55,32 +54,25 @@ def fetch_and_compute(sectors, benchmark, timeframe, lookback, history_len):
         if tk not in raw.columns:
             continue
         sec = raw[tk].dropna()
-        # align to benchmark index
         combined = pd.concat([bench, sec], axis=1, join="inner").dropna()
         b = combined.iloc[:, 0]
         p = combined.iloc[:, 1]
 
-        # % change over lookback period
         b_chg = b.pct_change(lb)
         p_chg = p.pct_change(lb)
 
-        # Relative Strength ratio
         rs = (1 + p_chg) / (1 + b_chg)
-
-        # RS Momentum = (current RS / previous RS) * 100
         rs_mom = (rs / rs.shift(1)) * 100
 
         df_s = pd.DataFrame({
-            "rs":  rs  * 100,   # scaled to % like TrendSpider
+            "rs":  rs * 100,
             "mom": rs_mom
         }).dropna()
 
-        # Keep only last N periods
         df_s = df_s.iloc[-history_len:]
         results.append({"meta": s, "data": df_s})
 
     return results
-
 
 # ─── BUILD FIGURE ─────────────────────────────────────────────
 def build_figure(results, history_len, last_dot_size, prev_dot_size):
@@ -132,24 +124,48 @@ def build_figure(results, history_len, last_dot_size, prev_dot_size):
                            showarrow=False, font=dict(size=13, color=col),
                            xanchor=xanchor, yanchor=yanchor, opacity=0.85)
 
-    # ── Sector scatter traces ─────────────────────────────────
+    # ── Sector scatter traces (smooth cubic spline) ───────────
     for r in results:
         df    = r["data"]
         meta  = r["meta"]
         color = meta["color"]
         label = meta.get("name", meta["ticker"])
+        n     = len(df)
 
-        n = len(df)
+        x_raw = df["rs"].values
+        y_raw = df["mom"].values
+
+        # Generate smooth curve if enough points
+        if n >= 4:
+            t        = np.linspace(0, 1, n)
+            t_smooth = np.linspace(0, 1, n * 20)
+            spl_x    = make_interp_spline(t, x_raw, k=3)
+            spl_y    = make_interp_spline(t, y_raw, k=3)
+            x_smooth = spl_x(t_smooth)
+            y_smooth = spl_y(t_smooth)
+        else:
+            x_smooth = x_raw
+            y_smooth = y_raw
+
+        # Smooth path line
+        fig.add_trace(go.Scatter(
+            x=x_smooth, y=y_smooth,
+            mode="lines",
+            name=label,
+            showlegend=False,
+            line=dict(color=color, width=1.8),
+            hoverinfo="skip"
+        ))
+
+        # Actual data point markers
         sizes = [prev_dot_size] * n
         if n > 0:
             sizes[-1] = last_dot_size
 
-        # line trace (path)
         fig.add_trace(go.Scatter(
-            x=df["rs"], y=df["mom"],
-            mode="lines+markers",
+            x=x_raw, y=y_raw,
+            mode="markers",
             name=label,
-            line=dict(color=color, width=1.5),
             marker=dict(color=color, size=sizes,
                         line=dict(color="white", width=0.5)),
             hovertemplate=(
@@ -159,10 +175,10 @@ def build_figure(results, history_len, last_dot_size, prev_dot_size):
             )
         ))
 
-        # Label at last point
+        # Ticker label at last point
         if n > 0:
             fig.add_annotation(
-                x=df["rs"].iloc[-1], y=df["mom"].iloc[-1],
+                x=x_raw[-1], y=y_raw[-1],
                 text=f" {meta['ticker']}",
                 showarrow=False, font=dict(size=10, color=color),
                 xanchor="left"
@@ -189,14 +205,14 @@ def build_figure(results, history_len, last_dot_size, prev_dot_size):
     )
     return fig
 
-
 # ─── DASH APP ─────────────────────────────────────────────────
 app = dash.Dash(__name__, title="Sector RRG")
-server = app.server   # for deployment (gunicorn/Render/Railway)
+server = app.server
 
 sector_options = [{"label": f"{s['ticker']} – {s['name']}", "value": s["ticker"]}
                   for s in DEFAULT_SECTORS]
-default_enabled = ["XLE", "XLI", "XLY", "XLV", "XLF", "XLK"]
+default_enabled = ["XLE", "XLB", "XLI", "XLY", "XLP", "XLV", "XLF", "XLK", "XLC", "XLU", "XLRE"]
+
 
 app.layout = html.Div(style={"backgroundColor": "#0d1117", "minHeight": "100vh",
                               "padding": "20px", "fontFamily": "Inter, sans-serif"}, children=[
@@ -206,7 +222,6 @@ app.layout = html.Div(style={"backgroundColor": "#0d1117", "minHeight": "100vh",
     html.P("Relative Rotation Graph — Leading / Weakening / Lagging / Improving",
            style={"color": "#8b949e", "marginTop": 0, "marginBottom": "20px"}),
 
-    # ── Controls ──────────────────────────────────────────────
     html.Div(style={"display": "flex", "flexWrap": "wrap", "gap": "20px",
                     "marginBottom": "20px"}, children=[
 
@@ -214,8 +229,7 @@ app.layout = html.Div(style={"backgroundColor": "#0d1117", "minHeight": "100vh",
             html.Label("Sectors", style={"color": "#8b949e", "fontSize": "12px"}),
             dcc.Dropdown(id="sectors", options=sector_options,
                          value=default_enabled, multi=True,
-                         style={"width": "420px", "backgroundColor": "#161b22"},
-                         className="dark-dropdown")
+                         style={"width": "420px", "backgroundColor": "#161b22"})
         ]),
 
         html.Div([
@@ -235,7 +249,7 @@ app.layout = html.Div(style={"backgroundColor": "#0d1117", "minHeight": "100vh",
 
         html.Div([
             html.Label("Lookback (periods)", style={"color": "#8b949e", "fontSize": "12px"}),
-            dcc.Input(id="lookback", value=13, type="number", min=1, max=52,
+            dcc.Input(id="lookback", value=26, type="number", min=1, max=60,
                       style={"width": "80px", "backgroundColor": "#161b22",
                              "color": "#e6edf3", "border": "1px solid #30363d",
                              "borderRadius": "6px", "padding": "6px"})
@@ -243,10 +257,9 @@ app.layout = html.Div(style={"backgroundColor": "#0d1117", "minHeight": "100vh",
 
         html.Div([
             html.Label("History Tail (bars)", style={"color": "#8b949e", "fontSize": "12px"}),
-            dcc.Slider(id="history", min=2, max=52, step=1, value=8,
+            dcc.Slider(id="history", min=2, max=60, step=1, value=8,
                        marks={2: "2", 13: "13", 26: "26", 52: "52"},
-                       tooltip={"placement": "bottom"},
-                       className="dark-slider")
+                       tooltip={"placement": "bottom"})
         ], style={"width": "200px"}),
 
         html.Div([
@@ -265,13 +278,10 @@ app.layout = html.Div(style={"backgroundColor": "#0d1117", "minHeight": "100vh",
         ]),
     ]),
 
-    # ── Chart ──────────────────────────────────────────────────
     dcc.Loading(type="circle", color="#58a6ff", children=[
-        dcc.Graph(id="rrg-chart", config={"displayModeBar": True,
-                                          "scrollZoom": True})
+        dcc.Graph(id="rrg-chart", config={"displayModeBar": True, "scrollZoom": True})
     ]),
 
-    # ── Quadrant Legend ───────────────────────────────────────
     html.Div(style={"display": "flex", "gap": "24px", "marginTop": "12px",
                     "flexWrap": "wrap"}, children=[
         html.Div([html.Span("●", style={"color": "#28A745", "fontSize": "18px"}),
@@ -287,7 +297,6 @@ app.layout = html.Div(style={"backgroundColor": "#0d1117", "minHeight": "100vh",
     html.P("Rotation is typically clockwise: Leading → Weakening → Lagging → Improving → Leading",
            style={"color": "#484f58", "fontSize": "12px", "marginTop": "8px"}),
 ])
-
 
 # ─── CALLBACK ─────────────────────────────────────────────────
 @app.callback(
@@ -307,8 +316,8 @@ def update_chart(_, selected_sectors, benchmark, timeframe,
         return go.Figure()
 
     sectors = [s for s in DEFAULT_SECTORS if s["ticker"] in selected_sectors]
-    lb = int(lookback) if lookback else (13 if timeframe == "Weekly" else 3)
-    hl = int(history_len) if history_len else 8
+    lb  = int(lookback)      if lookback      else (60 if timeframe == "Weekly" else 12)
+    hl  = int(history_len)   if history_len   else 8
     lds = int(last_dot_size) if last_dot_size else 10
 
     try:
@@ -321,7 +330,5 @@ def update_chart(_, selected_sectors, benchmark, timeframe,
         fig.update_layout(plot_bgcolor="#0d1117", paper_bgcolor="#0d1117")
         return fig
 
-
 if __name__ == "__main__":
     app.run(debug=False)
-
