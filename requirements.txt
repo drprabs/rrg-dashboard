@@ -1,6 +1,7 @@
-dash 
-plotly 
-yfinance 
-pandas 
-numpy 
+dash
+plotly
+yfinance
+pandas
+numpy
 gunicorn
+scipy
