@@ -12,6 +12,7 @@ from dash import dcc, html, Input, Output, State
 import plotly.graph_objects as go
 from scipy.interpolate import make_interp_spline
 
+
 # ─── DEFAULT SECTORS ─────────────────────────────────────────
 DEFAULT_SECTORS = [
     {"ticker": "XLE",  "color": "#FF5722", "name": "Energy"},
@@ -32,6 +33,7 @@ Q_IMPROVING = "rgba(30,144,255,0.12)"
 Q_LAGGING   = "rgba(220,53,69,0.12)"
 Q_WEAKENING = "rgba(255,193,7,0.12)"
 
+
 # ─── SHARED DATA FETCH ───────────────────────────────────────
 def fetch_prices(sectors, benchmark, timeframe, period="5y"):
     interval = "1d" if timeframe == "Daily" else "1wk" if timeframe == "Weekly" else "1mo"
@@ -41,6 +43,7 @@ def fetch_prices(sectors, benchmark, timeframe, period="5y"):
     if isinstance(raw, pd.Series):
         raw = raw.to_frame()
     return raw.dropna(how="all")
+
 
 # ─── RRG COMPUTATION ─────────────────────────────────────────
 def fetch_and_compute(sectors, benchmark, timeframe, lookback, history_len):
@@ -55,11 +58,12 @@ def fetch_and_compute(sectors, benchmark, timeframe, lookback, history_len):
         b, p = combined.iloc[:, 0], combined.iloc[:, 1]
         b_chg = b.pct_change(lookback)
         p_chg = p.pct_change(lookback)
-        rs      = (1 + p_chg) / (1 + b_chg)
-        rs_mom  = (rs / rs.shift(1)) * 100
-        df_s = pd.DataFrame({"rs": rs * 100, "mom": rs_mom}).dropna()
+        rs     = (1 + p_chg) / (1 + b_chg)
+        rs_mom = (rs / rs.shift(1)) * 100
+        df_s   = pd.DataFrame({"rs": rs * 100, "mom": rs_mom}).dropna()
         results.append({"meta": s, "data": df_s.iloc[-history_len:]})
     return results
+
 
 # ─── SECTOR / SPY RATIO LINE CHART ───────────────────────────
 def build_ratio_chart(sectors, benchmark, timeframe, period, normalize):
@@ -158,7 +162,7 @@ def build_ratio_chart(sectors, benchmark, timeframe, period, normalize):
     return fig
 
 
-# ─── RRG FIGURE (unchanged) ──────────────────────────────────
+# ─── RRG FIGURE ──────────────────────────────────────────────
 def build_figure(results, history_len, last_dot_size, prev_dot_size):
     fig = go.Figure()
     all_x, all_y = [], []
@@ -266,22 +270,23 @@ def build_figure(results, history_len, last_dot_size, prev_dot_size):
     )
     return fig
 
+
 # ─── DASH APP ─────────────────────────────────────────────────
-app  = dash.Dash(__name__, title="Sector RRG")
+app    = dash.Dash(__name__, title="Sector RRG")
 server = app.server
 
-sector_options   = [{"label": f"{s['ticker']} – {s['name']}", "value": s["ticker"]}
-                    for s in DEFAULT_SECTORS]
-default_enabled  = [s["ticker"] for s in DEFAULT_SECTORS]
+sector_options  = [{"label": f"{s['ticker']} – {s['name']}", "value": s["ticker"]}
+                   for s in DEFAULT_SECTORS]
+default_enabled = [s["ticker"] for s in DEFAULT_SECTORS]
 
 CTRL_STYLE  = {"backgroundColor": "#161b22", "color": "#e6edf3",
                "border": "1px solid #30363d", "borderRadius": "6px", "padding": "6px"}
 LABEL_STYLE = {"color": "#8b949e", "fontSize": "12px"}
 
-# ── Shared controls (reused in both tabs) ──────────────────────
+# ── Shared controls ────────────────────────────────────────────
 shared_controls = html.Div(
-    style={"display": "flex", "flexWrap": "wrap", "gap": "12px", "marginBottom": "8px", "alignItems": "flex-end"},
-
+    style={"display": "flex", "flexWrap": "wrap", "gap": "12px",
+           "marginBottom": "8px", "alignItems": "flex-end"},
     children=[
         html.Div([
             html.Label("Sectors", style=LABEL_STYLE),
@@ -321,15 +326,15 @@ shared_controls = html.Div(
             html.Button("🔄 Refresh", id="refresh", n_clicks=0,
                         style={"backgroundColor": "#238636", "color": "white",
                                "border": "none", "borderRadius": "6px",
-                               "padding": "10px 20px", "cursor": "pointer",
-                               "fontSize": "14px", "marginTop": "16px"})
+                               "padding": "8px 18px", "cursor": "pointer",
+                               "fontSize": "14px"})
         ]),
     ]
 )
 
-# ── Ratio-chart-specific controls ──────────────────────────────
+# ── Ratio-chart controls ───────────────────────────────────────
 ratio_controls = html.Div(
-    style={"display": "flex", "flexWrap": "wrap", "gap": "20px", "marginBottom": "16px"},
+    style={"display": "flex", "flexWrap": "wrap", "gap": "20px", "marginBottom": "8px"},
     children=[
         html.Div([
             html.Label("Period", style=LABEL_STYLE),
@@ -349,14 +354,14 @@ ratio_controls = html.Div(
     ]
 )
 
+# ── Layout ─────────────────────────────────────────────────────
 app.layout = html.Div(
     style={"backgroundColor": "#0d1117", "minHeight": "100vh",
-       "padding": "10px 16px", "fontFamily": "Inter, sans-serif"},
-
+           "padding": "10px 16px", "fontFamily": "Inter, sans-serif"},
     children=[
         html.H3("📊 Sector Rotation Dashboard",
-        style={"color": "#e6edf3", "marginBottom": "2px", "marginTop": "4px", "fontSize": "16px"}),
-
+                style={"color": "#e6edf3", "marginBottom": "2px",
+                       "marginTop": "4px", "fontSize": "16px"}),
 
         shared_controls,
 
@@ -365,34 +370,34 @@ app.layout = html.Div(
             colors={"border": "#30363d", "primary": "#58a6ff",
                     "background": "#161b22"},
             children=[
+
                 # ── Tab 1: RRG ───────────────────────────────
                 dcc.Tab(label="📡 RRG Chart", value="tab-rrg",
                         style={"color": "#8b949e", "backgroundColor": "#161b22"},
                         selected_style={"color": "#e6edf3", "backgroundColor": "#0d1117"},
                         children=[
                             dcc.Loading(type="circle", color="#58a6ff", children=[
-                                dcc.Graph(id="ratio-chart",
-          style={"height": "780px"},
-          config={"displayModeBar": True, "scrollZoom": True})
-
+                                dcc.Graph(id="rrg-chart",          # ✅ correct id
+                                          style={"height": "780px"},
+                                          config={"displayModeBar": True, "scrollZoom": True})
                             ]),
                             html.Div(
                                 style={"display": "flex", "gap": "24px",
-                                       "marginTop": "12px", "flexWrap": "wrap"},
+                                       "marginTop": "8px", "flexWrap": "wrap"},
                                 children=[
-                                    html.Div([html.Span("●", style={"color": "#28A745", "fontSize": "18px"}),
-                                              html.Span(" Leading — RS↑ Momentum↑", style={"color": "#8b949e", "fontSize": "13px"})]),
-                                    html.Div([html.Span("●", style={"color": "#1E90FF", "fontSize": "18px"}),
-                                              html.Span(" Improving — RS↓ Momentum↑", style={"color": "#8b949e", "fontSize": "13px"})]),
-                                    html.Div([html.Span("●", style={"color": "#FFC107", "fontSize": "18px"}),
-                                              html.Span(" Weakening — RS↑ Momentum↓", style={"color": "#8b949e", "fontSize": "13px"})]),
-                                    html.Div([html.Span("●", style={"color": "#DC3545", "fontSize": "18px"}),
-                                              html.Span(" Lagging — RS↓ Momentum↓", style={"color": "#8b949e", "fontSize": "13px"})]),
+                                    html.Div([html.Span("●", style={"color": "#28A745", "fontSize": "16px"}),
+                                              html.Span(" Leading — RS↑ Momentum↑", style={"color": "#8b949e", "fontSize": "12px"})]),
+                                    html.Div([html.Span("●", style={"color": "#1E90FF", "fontSize": "16px"}),
+                                              html.Span(" Improving — RS↓ Momentum↑", style={"color": "#8b949e", "fontSize": "12px"})]),
+                                    html.Div([html.Span("●", style={"color": "#FFC107", "fontSize": "16px"}),
+                                              html.Span(" Weakening — RS↑ Momentum↓", style={"color": "#8b949e", "fontSize": "12px"})]),
+                                    html.Div([html.Span("●", style={"color": "#DC3545", "fontSize": "16px"}),
+                                              html.Span(" Lagging — RS↓ Momentum↓", style={"color": "#8b949e", "fontSize": "12px"})]),
                                 ]
                             ),
                             html.P(
                                 "Rotation is typically clockwise: Leading → Weakening → Lagging → Improving → Leading",
-                                style={"color": "#484f58", "fontSize": "12px", "marginTop": "8px"}
+                                style={"color": "#484f58", "fontSize": "12px", "marginTop": "4px"}
                             ),
                         ]),
 
@@ -401,18 +406,17 @@ app.layout = html.Div(
                         style={"color": "#8b949e", "backgroundColor": "#161b22"},
                         selected_style={"color": "#e6edf3", "backgroundColor": "#0d1117"},
                         children=[
-                            html.Div(style={"marginTop": "16px"}, children=[
+                            html.Div(style={"marginTop": "12px"}, children=[
                                 ratio_controls,
                                 dcc.Loading(type="circle", color="#58a6ff", children=[
-                                    dcc.Graph(id="ratio-chart",
-          style={"height": "780px"},
-          config={"displayModeBar": True, "scrollZoom": True})
-
+                                    dcc.Graph(id="ratio-chart",    # ✅ correct id
+                                              style={"height": "780px"},
+                                              config={"displayModeBar": True, "scrollZoom": True})
                                 ]),
                                 html.P(
                                     "Lines above 100 = outperforming benchmark | "
                                     "Lines below 100 = underperforming | Normalized at start date.",
-                                    style={"color": "#484f58", "fontSize": "12px", "marginTop": "8px"}
+                                    style={"color": "#484f58", "fontSize": "12px", "marginTop": "4px"}
                                 ),
                             ])
                         ]),
@@ -420,6 +424,7 @@ app.layout = html.Div(
         ),
     ]
 )
+
 
 # ─── CALLBACK: RRG ───────────────────────────────────────────
 @app.callback(
@@ -451,6 +456,7 @@ def update_rrg(_, selected_sectors, benchmark, timeframe,
         fig.update_layout(plot_bgcolor="#0d1117", paper_bgcolor="#0d1117")
         return fig
 
+
 # ─── CALLBACK: RATIO LINE CHART ──────────────────────────────
 @app.callback(
     Output("ratio-chart", "figure"),
@@ -475,6 +481,7 @@ def update_ratio(_, period, normalize, selected_sectors, benchmark, timeframe):
                            showarrow=False, font=dict(color="red", size=14))
         fig.update_layout(plot_bgcolor="#0d1117", paper_bgcolor="#0d1117")
         return fig
+
 
 if __name__ == "__main__":
     app.run(debug=False)
