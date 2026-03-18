@@ -87,8 +87,25 @@ def build_ratio_chart(sectors, benchmark, timeframe, period, normalize):
             ratio = (ratio / ratio.iloc[0]) * 100   # base 100
 
         # Add SPY baseline only once (normalized = flat 100 line)
+                # ── Smooth the ratio line with cubic spline ──────────
+        y_raw = ratio.values
+        n     = len(y_raw)
+
+        if n >= 4:
+            t        = np.linspace(0, 1, n)
+            t_smooth = np.linspace(0, 1, n * 20)          # 20x more points = silky smooth
+            spl_y    = make_interp_spline(t, y_raw, k=3)  # k=3 = cubic
+            y_smooth = spl_y(t_smooth)
+            # Interpolate dates numerically then map back
+            x_num    = np.linspace(0, 1, n)
+            x_smooth_num = np.linspace(0, 1, n * 20)
+            x_dates  = pd.date_range(ratio.index[0], ratio.index[-1], periods=n * 20)
+        else:
+            y_smooth = y_raw
+            x_dates  = ratio.index
+
         fig.add_trace(go.Scatter(
-            x=ratio.index, y=ratio.values,
+            x=x_dates, y=y_smooth,
             mode="lines",
             name=f"{tk} ({s['name']})",
             line=dict(color=s["color"], width=2),
@@ -98,6 +115,7 @@ def build_ratio_chart(sectors, benchmark, timeframe, period, normalize):
                 "Ratio: %{y:.3f}<extra></extra>"
             )
         ))
+
 
     # Baseline at 100 (normalized) or at mean
     if normalize:
