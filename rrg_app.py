@@ -153,7 +153,7 @@ def build_ratio_chart(sectors, benchmark, timeframe, period, normalize):
                     borderwidth=1, font=dict(size=11)),
         hovermode="x unified",
         margin=dict(l=60, r=80, t=60, b=60),
-        height=620,
+        height=780,
     )
     return fig
 
@@ -260,7 +260,7 @@ def build_figure(results, history_len, last_dot_size, prev_dot_size):
         legend=dict(bgcolor="rgba(0,0,0,0.4)", bordercolor="rgba(128,128,128,0.3)",
                     borderwidth=1, font=dict(size=11)),
         margin=dict(l=60, r=40, t=50, b=60),
-        height=620,
+        height=780,
         title=dict(text="Sector Rotation — Relative Rotation Graph (RRG)",
                    font=dict(size=16), x=0.5)
     )
@@ -280,7 +280,8 @@ LABEL_STYLE = {"color": "#8b949e", "fontSize": "12px"}
 
 # ── Shared controls (reused in both tabs) ──────────────────────
 shared_controls = html.Div(
-    style={"display": "flex", "flexWrap": "wrap", "gap": "20px", "marginBottom": "20px"},
+    style={"display": "flex", "flexWrap": "wrap", "gap": "12px", "marginBottom": "8px", "alignItems": "flex-end"},
+
     children=[
         html.Div([
             html.Label("Sectors", style=LABEL_STYLE),
@@ -350,12 +351,12 @@ ratio_controls = html.Div(
 
 app.layout = html.Div(
     style={"backgroundColor": "#0d1117", "minHeight": "100vh",
-           "padding": "20px", "fontFamily": "Inter, sans-serif"},
+       "padding": "10px 16px", "fontFamily": "Inter, sans-serif"},
+
     children=[
-        html.H2("📊 Sector Rotation Dashboard",
-                style={"color": "#e6edf3", "marginBottom": "4px"}),
-        html.P("RRG + Sector / Benchmark Ratio Line Chart",
-               style={"color": "#8b949e", "marginTop": 0, "marginBottom": "20px"}),
+        html.H3("📊 Sector Rotation Dashboard",
+        style={"color": "#e6edf3", "marginBottom": "2px", "marginTop": "4px", "fontSize": "16px"}),
+
 
         shared_controls,
 
@@ -370,8 +371,10 @@ app.layout = html.Div(
                         selected_style={"color": "#e6edf3", "backgroundColor": "#0d1117"},
                         children=[
                             dcc.Loading(type="circle", color="#58a6ff", children=[
-                                dcc.Graph(id="rrg-chart",
-                                          config={"displayModeBar": True, "scrollZoom": True})
+                                dcc.Graph(id="ratio-chart",
+          style={"height": "780px"},
+          config={"displayModeBar": True, "scrollZoom": True})
+
                             ]),
                             html.Div(
                                 style={"display": "flex", "gap": "24px",
@@ -402,7 +405,9 @@ app.layout = html.Div(
                                 ratio_controls,
                                 dcc.Loading(type="circle", color="#58a6ff", children=[
                                     dcc.Graph(id="ratio-chart",
-                                              config={"displayModeBar": True, "scrollZoom": True})
+          style={"height": "780px"},
+          config={"displayModeBar": True, "scrollZoom": True})
+
                                 ]),
                                 html.P(
                                     "Lines above 100 = outperforming benchmark | "
